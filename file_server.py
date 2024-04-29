@@ -11,6 +11,7 @@ import io
 import base64
 from PIL import Image
 from dotenv import load_dotenv
+from file_size import get_folder_size
 
 load_dotenv()
 
@@ -77,22 +78,21 @@ def get_database():
 @app.route('/uploader', methods = ['GET', 'POST'])
 def save_uploaded_file():
    if request.method == 'POST':
-      f = request.files['file']
-      #print("THIS IS THE FILE: ",request.files)
-      #print("THIS IS THE NAME: ",request.form)
-      try:
-        f.save(os.path.join(app.instance_path, request.form['name'], secure_filename(f.filename))) #https://stackoverflow.com/a/42425388/13681680
-      except FileNotFoundError: #the directory doesn't exist
-         os.makedirs("uploaded_files/" + str(request.form['name']), exist_ok=True) #create directory and typecast to string for safety.Also https://stackoverflow.com/a/273227/13681680
-         f.save(os.path.join("uploaded_files", request.form['name'], secure_filename(f.filename)))
-      #insert the file into the database
-      collection = get_database()['flashback_db']
-      file = {
-        "name": f.filename,
-        "path": os.path.join("uploaded_files", request.form['name'], secure_filename(f.filename)),
-        "owner": request.form['name']
-        }
-      collection.insert_one(file)
+      files = request.files.getlist('file')
+      for f in files:
+         try:
+            f.save(os.path.join(app.instance_path, request.form['name'], secure_filename(f.filename))) #https://stackoverflow.com/a/42425388/13681680
+         except FileNotFoundError: #the directory doesn't exist
+            os.makedirs("uploaded_files/" + str(request.form['name']), exist_ok=True) #create directory and typecast to string for safety.Also https://stackoverflow.com/a/273227/13681680
+            f.save(os.path.join("uploaded_files", request.form['name'], secure_filename(f.filename)))
+         #insert the file into the database
+            collection = get_database()['flashback_db']
+            file = {
+               "name": f.filename,
+               "path": os.path.join("uploaded_files", request.form['name'], secure_filename(f.filename)),
+               "owner": request.form['name']
+            }
+            collection.insert_one(file)
       return 'file uploaded successfully'
 
 
@@ -108,7 +108,7 @@ def get_response_image(image_path):
     img = open(image_path, mode='rb') # reads the PIL image
     print(image_path)
     byte_arr = img.read()
-    encoded_img = base64.encodebytes(byte_arr).decode('ascii') # encode as base64
+    encoded_img = base64.encodebytes(byte_arr).decode('utf-8') # encode as base64
     return encoded_img
 
 
@@ -133,6 +133,12 @@ def get_files():
    print("I AM GETTING REQUEST FROM FRONTEND")
    return jsonify({'result': encoded_imges})
    #return encoded_imges[0]
+
+#create an endpoint to view the size of all files uploaded by a user
+@app.route('/getsize', methods = ['GET'])
+def get_size():
+   name = request.args.get('name')
+   return {"size": get_folder_size(f"uploaded_files/{name}").MB}
 
 if __name__ == '__main__':
    app.run(debug = True)
