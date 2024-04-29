@@ -27,6 +27,7 @@ if __name__ == "__main__":
     path = sys.argv[1] if len(sys.argv) > 1 else './uploaded_files'
     event_handler = MyEvent()
     observer = Observer()
+    print(path)
     observer.schedule(event_handler, path, recursive=True)
     observer.start()
     print("File Watcher Started")

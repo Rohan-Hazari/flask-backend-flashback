@@ -2,6 +2,8 @@ from flask import Flask, render_template, request, send_from_directory, jsonify
 from werkzeug.utils import secure_filename
 import os
 import chromadb
+from flask_cors import CORS
+from flask import send_from_directory
 from pymongo import MongoClient
 import urllib
 import shutil
@@ -12,7 +14,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-app = Flask(__name__)
+current_directory = os.getcwd()
+
+# Construct the absolute instance folder path relative to the current working directory
+instance_folder_name = 'uploaded_files'
+absolute_instance_path = os.path.join(current_directory, instance_folder_name)
+
+app = Flask(__name__,instance_path=absolute_instance_path)
+CORS(app,origins=['http://localhost:5173'])
 chroma_client = chromadb.PersistentClient(path="chromadb")
 collection = chroma_client.get_collection(name="my_collection")
 
@@ -58,8 +67,7 @@ def get_database():
    # Provide the mongodb atlas url to connect python to mongodb using pymongo
    user = urllib.parse.quote(os.environ.get('MONGO_USER'))
    password = urllib.parse.quote(os.environ.get('MONGO_PASSWORD'))
-   CONNECTION_STRING = f"mongodb+srv://{user}:{password}@cluster0.fkwx6.mongodb.net/flashback"
- 
+   CONNECTION_STRING = f"mongodb+srv://{user}:{password}@cluster0.bdolsc8.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
    # Create a connection using MongoClient. You can import MongoClient or use pymongo.MongoClient
    client = MongoClient(CONNECTION_STRING)
  
@@ -70,20 +78,23 @@ def get_database():
 def save_uploaded_file():
    if request.method == 'POST':
       f = request.files['file']
+      #print("THIS IS THE FILE: ",request.files)
+      #print("THIS IS THE NAME: ",request.form)
       try:
         f.save(os.path.join(app.instance_path, request.form['name'], secure_filename(f.filename))) #https://stackoverflow.com/a/42425388/13681680
       except FileNotFoundError: #the directory doesn't exist
          os.makedirs("uploaded_files/" + str(request.form['name']), exist_ok=True) #create directory and typecast to string for safety.Also https://stackoverflow.com/a/273227/13681680
          f.save(os.path.join("uploaded_files", request.form['name'], secure_filename(f.filename)))
       #insert the file into the database
-         collection = get_database()['flashback_db']
-         file = {
-            "name": f.filename,
-            "path": os.path.join("uploaded_files", request.form['name'], secure_filename(f.filename)),
-            "owner": request.form['name']
-         }
-         collection.insert_one(file)
+      collection = get_database()['flashback_db']
+      file = {
+        "name": f.filename,
+        "path": os.path.join("uploaded_files", request.form['name'], secure_filename(f.filename)),
+        "owner": request.form['name']
+        }
+      collection.insert_one(file)
       return 'file uploaded successfully'
+
 
 #https://stackoverflow.com/a/64067673/13681680
 """def get_response_image(image_path):
@@ -100,6 +111,12 @@ def get_response_image(image_path):
     encoded_img = base64.encodebytes(byte_arr).decode('ascii') # encode as base64
     return encoded_img
 
+
+
+@app.route('/uploaded_files/<username>/<filename>')
+def uploaded_files(username, filename):
+    return send_from_directory(os.path.join('./uploaded_files', username), filename)
+
 #create an endpoint to get all the files uploaded by a specific user
 @app.route('/getfiles', methods = ['GET'])
 def get_files():
@@ -112,9 +129,12 @@ def get_files():
    #return render_template('my_files.html', files=files)
    encoded_imges = []
    for image_path in files:
-      encoded_imges.append((get_response_image(image_path)))
+      encoded_imges.append((get_response_image(image_path).replace('\n','')))
+   print("I AM GETTING REQUEST FROM FRONTEND")
    return jsonify({'result': encoded_imges})
    #return encoded_imges[0]
 
 if __name__ == '__main__':
    app.run(debug = True)
+
+
