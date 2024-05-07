@@ -24,7 +24,7 @@ absolute_instance_path = os.path.join(current_directory, instance_folder_name)
 app = Flask(__name__,instance_path=absolute_instance_path)
 CORS(app,origins=['http://localhost:5173'])
 chroma_client = chromadb.PersistentClient(path="chromadb")
-collection = chroma_client.get_collection(name="my_collection")
+collection = chroma_client.get_or_create_collection(name="my_collection")
 
 @app.route('/')
 def upload_file():
@@ -57,12 +57,19 @@ def search():
     #search with GET method using the search parameter from the URL
    if request.method == 'GET':
       query = request.args.get('search')
+      owner = request.args.get('user_id')
       results = collection.query(
             query_texts=[query],
-            n_results=10
+            n_results=10,
+            owner = owner
         )
-        #return in JSON
-      return {"results": results}
+      #instead of returning in JSON, we need to encode in base64 and return each image
+      encoded_imges = []
+      for i in range(len(results['metadatas'][0])):
+         encoded_imges.append((get_response_image(results['metadatas'][0][i]['path'])))
+      return jsonify({'result': encoded_imges})
+      #return in JSON
+      #return {"results": results}
 
 def get_database():
    # Provide the mongodb atlas url to connect python to mongodb using pymongo
@@ -81,15 +88,15 @@ def save_uploaded_file():
       files = request.files.getlist('file')
       for f in files:
          try:
-            f.save(os.path.join(app.instance_path, request.form['name'], secure_filename(f.filename))) #https://stackoverflow.com/a/42425388/13681680
+            f.save(os.path.join(app.instance_path, request.form['user_id'], secure_filename(f.filename))) #https://stackoverflow.com/a/42425388/13681680
          except FileNotFoundError: #the directory doesn't exist
-            os.makedirs("uploaded_files/" + str(request.form['name']), exist_ok=True) #create directory and typecast to string for safety.Also https://stackoverflow.com/a/273227/13681680
-            f.save(os.path.join("uploaded_files", request.form['name'], secure_filename(f.filename)))
+            os.makedirs("uploaded_files/" + str(request.form['user_id']), exist_ok=True) #create directory and typecast to string for safety.Also https://stackoverflow.com/a/273227/13681680
+            f.save(os.path.join("uploaded_files", request.form['user_id'], secure_filename(f.filename)))
          #insert the file into the database
             collection = get_database()['flashback_db']
             file = {
                "name": f.filename,
-               "path": os.path.join("uploaded_files", request.form['name'], secure_filename(f.filename)),
+               "path": os.path.join("uploaded_files", request.form['user_id'], secure_filename(f.filename)),
                "owner": request.form['name']
             }
             collection.insert_one(file)
@@ -137,8 +144,8 @@ def get_files():
 #create an endpoint to view the size of all files uploaded by a user
 @app.route('/getsize', methods = ['GET'])
 def get_size():
-   name = request.args.get('name')
-   return {"size": get_folder_size(f"uploaded_files/{name}").MB}
+   owner = request.args.get('user_id')
+   return {"size": get_folder_size(f"uploaded_files/{owner}").MB}
 
 if __name__ == '__main__':
    app.run(debug = True)
