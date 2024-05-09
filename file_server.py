@@ -97,7 +97,7 @@ def save_uploaded_file():
             file = {
                "name": f.filename,
                "path": os.path.join("uploaded_files", request.form['user_id'], secure_filename(f.filename)),
-               "owner": request.form['name']
+               "owner": request.form['user_id']
             }
             collection.insert_one(file)
       return f'{len(files)} file(s) uploaded successfully'
@@ -127,11 +127,11 @@ def uploaded_files(username, filename):
 #create an endpoint to get all the files uploaded by a specific user
 @app.route('/getfiles', methods = ['GET'])
 def get_files():
-   name = request.args.get('name')
+   user_id = request.args.get('user_id')
    files = []
-   for root, dirs, filenames in os.walk(f"uploaded_files/{name}"):
+   for root, dirs, filenames in os.walk(f"uploaded_files/{user_id}"):
       for file in filenames:
-         files.append(f"uploaded_files/{name}/" + file)
+         files.append(f"uploaded_files/{user_id}/" + file)
    #return {"files": files}
    #return render_template('my_files.html', files=files)
    encoded_imges = []
