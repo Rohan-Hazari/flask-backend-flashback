@@ -60,8 +60,8 @@ def search():
       owner = request.args.get('user_id')
       results = collection.query(
             query_texts=[query],
-            n_results=10,
-            owner = owner
+            n_results=2,
+            where={"owner":owner}
         )
       #instead of returning in JSON, we need to encode in base64 and return each image
       encoded_imges = []
